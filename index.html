@@ -336,12 +336,12 @@ function runMatching(){
   const pairs = [];
   MEN.forEach((m, mi)=>{
     WOMEN.forEach((w, wi)=>{
-      let s = 0;
       const mRank = menPrefs[mi].indexOf(w);
       const wRank = womenPrefs[wi].indexOf(m);
-      if(mRank>=0) s += score[mRank+1];
-      if(wRank>=0) s += score[wRank+1];
-      if(s>0) pairs.push({m, w, s, mutual: mRank>=0 && wRank>=0, mRank: mRank>=0?mRank+1:null, wRank: wRank>=0?wRank+1:null});
+      if(mRank>=0 && wRank>=0){
+        const s = score[mRank+1] + score[wRank+1];
+        pairs.push({m, w, s, mutual: true, mRank: mRank+1, wRank: wRank+1});
+      }
     });
   });
   pairs.sort((a,b)=> b.s - a.s);
@@ -355,14 +355,9 @@ function runMatching(){
     }
   });
 
-  const unmatchedM = MEN.filter(m=>!matchedM.has(m));
-  const unmatchedW = WOMEN.filter(w=>!matchedW.has(w));
-  unmatchedM.forEach((m, i)=>{
-    if(unmatchedW[i]) results.push({m, w: unmatchedW[i], s:0, mRank:null, wRank:null, mutual:false, random:true});
-  });
-  const leftover = [...unmatchedM.slice(unmatchedW.length), ...unmatchedW.slice(unmatchedM.length)];
+  const unmatched = [...MEN.filter(m=>!matchedM.has(m)), ...WOMEN.filter(w=>!matchedW.has(w))];
 
-  renderResult(results, leftover);
+  renderResult(results, unmatched);
   showTab('result');
 }
 
@@ -375,32 +370,31 @@ function rankLabel(r){
 
 function renderResult(results, leftover){
   leftover = leftover || [];
-  const mutualCount = results.filter(r=>r.mutual && r.mRank===1 && r.wRank===1).length;
-  const randomCount = results.filter(r=>r.random).length;
+  const mutualCount = results.filter(r=>r.mRank===1 && r.wRank===1).length;
 
   let html = '<div class="help-box">' +
     '<span class="help-title">3단계. 매칭 결과 확인</span>' +
-    '아래 표는 최종 커플 매칭 결과입니다. <b>"남→여 순위"</b>는 남성이 그 여성을 몇 순위로 골랐는지, <b>"여→남 순위"</b>는 여성이 그 남성을 몇 순위로 골랐는지를 의미합니다. 결과를 인쇄하거나 PDF로 저장해 행사 진행에 활용하세요.' +
+    '아래 표는 서로가 서로를 1~3순위 안에서 선택해 <b>실제로 매칭이 성사된 커플</b>만 보여줍니다. <b>"남→여 순위"</b>는 남성이 그 여성을 몇 순위로 골랐는지, <b>"여→남 순위"</b>는 여성이 그 남성을 몇 순위로 골랐는지를 의미합니다. 결과를 인쇄하거나 PDF로 저장해 행사 진행에 활용하세요.' +
     '<div class="legend">' +
       '<span class="badge badge-best">서로 1순위</span>둘 다 서로를 1순위로 선택한 가장 좋은 매칭' +
-      '<span class="badge badge-mutual">상호 선택</span>서로의 1~3순위 안에 들어 매칭됨' +
-      '<span class="badge badge-auto">자동 배정</span>순위가 일치하지 않아 남은 인원끼리 자동으로 짝지어짐' +
+      '<span class="badge badge-mutual">상호 선택</span>1~3순위 안에서 서로를 선택해 매칭됨' +
     '</div>' +
   '</div>';
 
+  const otherMutualCount = results.length - mutualCount;
+
   html += '<div class="metrics">';
-  html += metricCard('전체 매칭', results.length+' 쌍');
   html += metricCard('서로 1순위 매칭', mutualCount+' 쌍');
-  html += metricCard('순위 미일치(자동 배정)', randomCount+' 쌍');
+  html += metricCard('상호 선택 매칭', otherMutualCount+' 쌍');
+  html += metricCard('총 매칭 성사', results.length+' 쌍');
   html += '</div>';
 
   html += '<table><tr><th>남성</th><th>여성</th><th>남→여 순위</th><th>여→남 순위</th><th>비고</th></tr>';
 
   results.forEach(r=>{
     let note = '', badgeClass = '';
-    if(r.random){ note = '자동 배정'; badgeClass = 'badge-auto'; }
-    else if(r.mRank===1 && r.wRank===1){ note = '서로 1순위'; badgeClass = 'badge-best'; }
-    else if(r.mutual){ note = '상호 선택'; badgeClass = 'badge-mutual'; }
+    if(r.mRank===1 && r.wRank===1){ note = '서로 1순위'; badgeClass = 'badge-best'; }
+    else { note = '상호 선택'; badgeClass = 'badge-mutual'; }
     html += '<tr>' +
       '<td style="font-weight:600; color:var(--brand-dark);">'+r.m+'</td>' +
       '<td style="font-weight:600; color:var(--brand-dark);">'+r.w+'</td>' +
@@ -410,9 +404,6 @@ function renderResult(results, leftover){
       '</tr>';
   });
   html += '</table>';
-  if(leftover.length > 0){
-    html += '<p style="margin-top:16px; font-size:13px; color:var(--text-sub);">매칭에서 제외된 인원 ('+leftover.length+'명): '+leftover.join(', ')+'</p>';
-  }
   html += '<div style="margin-top:20px;"><button class="secondary" onclick="window.print()">결과 인쇄 / PDF 저장</button></div>';
 
   document.getElementById('panel-result').innerHTML = html;
